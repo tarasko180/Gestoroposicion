@@ -7,7 +7,7 @@ st.set_page_config(page_title="Gestor de Repasos y Cante - Oposición", layout="
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
 st.markdown("Sistema inteligente de repetición espaciada continua: 6 repasos exponenciales (+1d, +2d, +4d, +8d, +16d, +32d) y mantenimiento indefinido continuo alternando cada 16 y 32 días.")
 
-# Definición de intervalos iniciales y mantenimiento indefinido
+# Intervalos de días a sumar desde el cante anterior para calcular el siguiente cante
 INTERVALOS_INICIALES = [1, 2, 4, 8, 16, 32]
 
 def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
@@ -20,11 +20,9 @@ def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
     
     ultima_fecha = historial[-1]["fecha"]
     
-    if num_repasos <= 6:
-        # Repasos iniciales del 1 al 6
-        dias = INTERVALOS_INICIALES[num_repasos - 1]
+    if num_repasos < 6:
+        dias = INTERVALOS_INICIALES[num_repasos]
     else:
-        # Repasos indefinidos post-6º cante: alternancia entre 16 y 32 días
         dias = 16 if (num_repasos % 2 != 0) else 32
         
     return ultima_fecha + timedelta(days=dias)
@@ -112,7 +110,7 @@ with tab1:
             filtro_estado = st.multiselect(
                 "Filtrar por estado:",
                 options=["🟢 TOCA HOY", "🔴 ATRASADO", "🟡 MAÑANA", "Todos"],
-                default=["🟢 TOCA HOY", "🔴 ATRASADO"]
+                default=["🟢 TOCA HOY", "🔴 ATRASADO", "🟡 MAÑANA", "Todos"]
             )
         
         if "Todos" not in filtro_estado and filtro_estado:
@@ -192,7 +190,6 @@ with tab3:
                     "duracion_min": duracion_cante,
                     "obs": obs_c
                 })
-                # Reordenar historial por fecha por si se introdujo un cante con fecha pasada
                 hist = sorted(hist, key=lambda x: x["fecha"])
                 for i_h, h_item in enumerate(hist):
                     h_item["n"] = i_h + 1
@@ -203,7 +200,7 @@ with tab3:
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
                 
                 st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO ({fecha_cante_real.strftime('%d/%m/%Y')}): {tema_cantar} - Nota: {nota_c}", icon="📝")
-                st.success(f"🎉 ¡Cante registrado con fecha {fecha_cante_real.strftime('%d/%m/%Y')}! La curva se ha recalculado automáticamente. Próximo cante programado: {proxima.strftime('%d/%m/%Y')}.")
+                st.success(f"🎉 ¡Cante registrado con fecha {fecha_cante_real.strftime('%d/%m/%Y')}! Próximo cante programado: {proxima.strftime('%d/%m/%Y')}.")
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
 with tab4:
@@ -259,7 +256,6 @@ with tab4:
                                 "duracion_min": ed_min,
                                 "obs": ed_obs
                             }
-                            # Ordenar historial por fecha si se editó la fecha
                             hist = sorted(hist, key=lambda x: x["fecha"])
                             for i_h, h_item in enumerate(hist):
                                 h_item["n"] = i_h + 1
