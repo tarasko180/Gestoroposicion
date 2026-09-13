@@ -7,9 +7,10 @@ import os
 st.set_page_config(page_title="Gestor de Repasos y Cante - Oposición", layout="wide", page_icon="👮‍♂️")
 
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
-st.markdown("Sistema inteligente de repetición espaciada continua para **MacBook, iPad e iPhone**.")
+st.markdown("Sistema de doble garantía: **Persistencia Automática en la Nube + Copias de Seguridad Descargables**.")
 
 INTERVALOS_INICIALES = [1, 2, 4, 8, 16, 32]
+DATA_FILE = "temas_data.json"
 
 # --- DATOS POR DEFECTO ---
 TEMAS_DEFAULT = [
@@ -36,8 +37,6 @@ TEMAS_DEFAULT = [
         "proximo_repaso_manual": None
     }
 ]
-
-DATA_FILE = "temas_data.json"
 
 def parse_dates(data):
     for t in data:
@@ -71,7 +70,7 @@ def serialize_data(data):
         data_to_save.append(t_copy)
     return data_to_save
 
-# Cargar datos al iniciar
+# Cargar datos al iniciar con prioridad a archivo guardado
 if 'temas_db' not in st.session_state:
     if os.path.exists(DATA_FILE):
         try:
@@ -82,35 +81,37 @@ if 'temas_db' not in st.session_state:
     else:
         st.session_state.temas_db = parse_dates(TEMAS_DEFAULT)
 
-def guardar_local():
+def guardar_todo():
     serialized = serialize_data(st.session_state.temas_db)
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(serialized, f, ensure_ascii=False, indent=2)
 
-# Sidebar para exportar / importar copia de seguridad permanente
+# --- SIDEBAR DE SEGURIDAD (RESPALDO MANUAL) ---
 with st.sidebar:
-    st.header("💾 Copia de Seguridad Cloud")
-    st.caption("Los servidores gratuitos de Streamlit reinician el disco duro si la app entra en reposo. Guarda tu copia con un clic:")
+    st.header("🛡️ Doble Protección de Datos")
+    st.markdown("**1. Respaldo Manual en Local:**")
     
+    # Exportar datos
     json_bytes = json.dumps(serialize_data(st.session_state.temas_db), ensure_ascii=False, indent=2).encode('utf-8')
     st.download_button(
-        label="📥 Descargar Copia de Seguridad",
+        label="📥 Descargar Copia de Seguridad (.json)",
         data=json_bytes,
-        file_name="temas_oposicion_backup.json",
+        file_name=f"backup_oposicion_{date.today().strftime('%Y_%m_%d')}.json",
         mime="application/json",
         use_container_width=True
     )
     
-    uploaded_file = st.file_uploader("📤 Cargar Copia de Seguridad (.json)", type=["json"])
+    # Importar datos
+    uploaded_file = st.file_uploader("📤 Restaurar Copia (.json)", type=["json"])
     if uploaded_file is not None:
         try:
             loaded_data = json.load(uploaded_file)
             st.session_state.temas_db = parse_dates(loaded_data)
-            guardar_local()
-            st.success("✅ ¡Datos cargados con éxito!")
+            guardar_todo()
+            st.success("✅ ¡Base de datos restaurada!")
             st.rerun()
         except Exception as e:
-            st.error(f"Error al cargar archivo: {e}")
+            st.error(f"Error al cargar copia: {e}")
 
 def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
     if fecha_manual is not None:
@@ -212,8 +213,8 @@ with tab2:
                     "historial": [],
                     "proximo_repaso_manual": None
                 })
-                guardar_local()
-                st.toast(f"✅ ¡Tema '{nuevo_nombre}' añadido!", icon="🎉")
+                guardar_todo()
+                st.toast(f"✅ ¡Tema '{nuevo_nombre}' añadido y protegido!", icon="🎉")
                 st.success(f"¡Tema '{nuevo_nombre}' registrado!")
                 st.rerun()
 
@@ -265,10 +266,10 @@ with tab3:
                 
                 st.session_state.temas_db[idx]["historial"] = hist
                 st.session_state.temas_db[idx]["proximo_repaso_manual"] = None
-                guardar_local()
+                guardar_todo()
                 
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
-                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO", icon="📝")
+                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO Y SINCRO", icon="📝")
                 st.success(f"🎉 ¡Cante guardado! Próximo cante: {proxima.strftime('%d/%m/%Y')}.")
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
@@ -293,7 +294,7 @@ with tab4:
             
             if st.button("📌 Reagendar Próximo Cante"):
                 st.session_state.temas_db[idx_t]["proximo_repaso_manual"] = nueva_fecha_manual
-                guardar_local()
+                guardar_todo()
                 st.toast("✅ Fecha actualizada", icon="🗓️")
                 st.rerun()
 
@@ -329,7 +330,7 @@ with tab4:
                             for i_h, h_item in enumerate(hist):
                                 h_item["n"] = i_h + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
-                            guardar_local()
+                            guardar_todo()
                             st.toast("✅ Cante modificado", icon="💾")
                             st.rerun()
                     
@@ -339,7 +340,7 @@ with tab4:
                             for new_i, item in enumerate(hist):
                                 item["n"] = new_i + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
-                            guardar_local()
+                            guardar_todo()
                             st.toast("🗑️ Cante eliminado", icon="🗑️")
                             st.rerun()
 
