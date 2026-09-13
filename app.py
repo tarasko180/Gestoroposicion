@@ -3,22 +3,27 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 import json
 import os
-from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Gestor de Repasos y Cante - Oposición", layout="wide", page_icon="👮‍♂️")
 
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
-st.markdown("Sistema de triple garantía: **Sincronización Automática con Google Sheets + Respaldo Local + Copias Descargables**.")
+st.markdown("Sistema de triple garantía: **Sincronización Automática + Respaldo Local + Copias Descargables**.")
 
 INTERVALOS_INICIALES = [1, 2, 4, 8, 16, 32]
 DATA_FILE = "temas_data.json"
 
-# --- INTENTO DE CONEXIÓN CON GOOGLE SHEETS ---
+# --- CONEXIÓN BLINDADA A GOOGLE SHEETS ---
 use_gsheets = False
+conn = None
+
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    use_gsheets = True
-except Exception:
+    from streamlit_gsheets import GSheetsConnection
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        use_gsheets = True
+    except Exception:
+        use_gsheets = False
+except ImportError:
     use_gsheets = False
 
 # --- DATOS POR DEFECTO ---
@@ -82,7 +87,7 @@ def serialize_data(data):
 # Cargar datos (Prioridad: Google Sheets -> Archivo Local -> Valores por defecto)
 if 'temas_db' not in st.session_state:
     loaded_flag = False
-    if use_gsheets:
+    if use_gsheets and conn is not None:
         try:
             df_gsheet = conn.read(ttl=0)
             if not df_gsheet.empty and "json_data" in df_gsheet.columns:
@@ -109,8 +114,8 @@ def guardar_todo():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(serialized, f, ensure_ascii=False, indent=2)
         
-    # 2. Guardar en Google Sheets si está conectado
-    if use_gsheets:
+    # 2. Guardar en Google Sheets si está activo
+    if use_gsheets and conn is not None:
         try:
             json_str = json.dumps(serialized, ensure_ascii=False)
             df_to_write = pd.DataFrame([{"json_data": json_str, "ultima_actualizacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}])
@@ -250,7 +255,7 @@ with tab2:
                     "proximo_repaso_manual": None
                 })
                 guardar_todo()
-                st.toast(f"✅ ¡Tema '{nuevo_nombre}' guardado y sincronizado!", icon="🎉")
+                st.toast(f"✅ ¡Tema '{nuevo_nombre}' guardado!", icon="🎉")
                 st.success(f"¡Tema '{nuevo_nombre}' registrado!")
                 st.rerun()
 
@@ -305,7 +310,7 @@ with tab3:
                 guardar_todo()
                 
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
-                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO Y SINCRONIZADO", icon="📝")
+                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO", icon="📝")
                 st.success(f"🎉 ¡Cante guardado! Próximo cante: {proxima.strftime('%d/%m/%Y')}.")
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
