@@ -7,98 +7,125 @@ import os
 st.set_page_config(page_title="Gestor de Repasos y Cante - Oposición", layout="wide", page_icon="👮‍♂️")
 
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
-st.markdown("Sistema inteligente de repetición espaciada continua con **almacenamiento permanente**: los temas y cantes no se borran al actualizar la página.")
+st.markdown("Sistema inteligente de repetición espaciada continua para **MacBook, iPad e iPhone**.")
 
-DATA_FILE = "temas_data.json"
 INTERVALOS_INICIALES = [1, 2, 4, 8, 16, 32]
 
-# --- FUNCIONES DE PERSISTENCIA (GUARDAR Y CARGAR DE DISCO) ---
-def cargar_datos():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for t in data:
-                    t["fecha_inicio"] = datetime.strptime(t["fecha_inicio"], "%Y-%m-%d").date()
-                    if t.get("proximo_repaso_manual"):
-                        t["proximo_repaso_manual"] = datetime.strptime(t["proximo_repaso_manual"], "%Y-%m-%d").date()
-                    for h in t["historial"]:
-                        h["fecha"] = datetime.strptime(h["fecha"], "%Y-%m-%d").date()
-                return data
-        except Exception as e:
-            st.error(f"Error cargando archivo de datos: {e}")
-    
-    # Datos por defecto si el archivo no existe aún en la primera ejecución
-    return [
-        {
-            "id": 1, 
-            "tema": "T1 Constitución Española", 
-            "fecha_inicio": date(2026, 9, 1),
-            "historial": [
-                {"n": 1, "fecha": date(2026, 9, 2), "nota": 9.5, "duracion_min": 15.0, "obs": "Excelente estructura y articulado."},
-                {"n": 2, "fecha": date(2026, 9, 4), "nota": 9.0, "duracion_min": 14.2, "obs": "Sin fallos significativos."},
-                {"n": 3, "fecha": date(2026, 9, 8), "nota": 9.0, "duracion_min": 14.0, "obs": "Dominado con fluidez."}
-            ],
-            "proximo_repaso_manual": None
-        },
-        {
-            "id": 2, 
-            "tema": "T39 LO 4/00 Ley de Extranjería", 
-            "fecha_inicio": date(2026, 9, 1),
-            "historial": [
-                {"n": 1, "fecha": date(2026, 9, 2), "nota": 4.5, "duracion_min": 12.5, "obs": "Primer cante, dudas en artículos."},
-                {"n": 2, "fecha": date(2026, 9, 4), "nota": 7.0, "duracion_min": 10.2, "obs": "Mejora sustancial en la exposición."},
-                {"n": 3, "fecha": date(2026, 9, 8), "nota": 7.0, "duracion_min": 9.5, "obs": "Buena fluidez general."}
-            ],
-            "proximo_repaso_manual": None
-        }
-    ]
+# --- DATOS POR DEFECTO ---
+TEMAS_DEFAULT = [
+    {
+        "id": 1, 
+        "tema": "T1 Constitución Española", 
+        "fecha_inicio": "2026-09-01",
+        "historial": [
+            {"n": 1, "fecha": "2026-09-02", "nota": 9.5, "duracion_min": 15.0, "obs": "Excelente estructura y articulado."},
+            {"n": 2, "fecha": "2026-09-04", "nota": 9.0, "duracion_min": 14.2, "obs": "Sin fallos significativos."},
+            {"n": 3, "fecha": "2026-09-08", "nota": 9.0, "duracion_min": 14.0, "obs": "Dominado con fluidez."}
+        ],
+        "proximo_repaso_manual": None
+    },
+    {
+        "id": 2, 
+        "tema": "T39 LO 4/00 Ley de Extranjería", 
+        "fecha_inicio": "2026-09-01",
+        "historial": [
+            {"n": 1, "fecha": "2026-09-02", "nota": 4.5, "duracion_min": 12.5, "obs": "Primer cante, dudas en artículos."},
+            {"n": 2, "fecha": "2026-09-04", "nota": 7.0, "duracion_min": 10.2, "obs": "Mejora sustancial en la exposición."},
+            {"n": 3, "fecha": "2026-09-08", "nota": 7.0, "duracion_min": 9.5, "obs": "Buena fluidez general."}
+        ],
+        "proximo_repaso_manual": None
+    }
+]
 
-def guardar_datos():
+DATA_FILE = "temas_data.json"
+
+def parse_dates(data):
+    for t in data:
+        if isinstance(t["fecha_inicio"], str):
+            t["fecha_inicio"] = datetime.strptime(t["fecha_inicio"], "%Y-%m-%d").date()
+        if t.get("proximo_repaso_manual") and isinstance(t["proximo_repaso_manual"], str):
+            t["proximo_repaso_manual"] = datetime.strptime(t["proximo_repaso_manual"], "%Y-%m-%d").date()
+        for h in t["historial"]:
+            if isinstance(h["fecha"], str):
+                h["fecha"] = datetime.strptime(h["fecha"], "%Y-%m-%d").date()
+    return data
+
+def serialize_data(data):
     data_to_save = []
-    for t in st.session_state.temas_db:
+    for t in data:
         t_copy = {
             "id": t["id"],
             "tema": t["tema"],
-            "fecha_inicio": t["fecha_inicio"].strftime("%Y-%m-%d"),
-            "proximo_repaso_manual": t["proximo_repaso_manual"].strftime("%Y-%m-%d") if t.get("proximo_repaso_manual") else None,
+            "fecha_inicio": t["fecha_inicio"].strftime("%Y-%m-%d") if isinstance(t["fecha_inicio"], (date, datetime)) else t["fecha_inicio"],
+            "proximo_repaso_manual": t["proximo_repaso_manual"].strftime("%Y-%m-%d") if t.get("proximo_repaso_manual") and isinstance(t["proximo_repaso_manual"], (date, datetime)) else t.get("proximo_repaso_manual"),
             "historial": []
         }
         for h in t["historial"]:
             t_copy["historial"].append({
                 "n": h["n"],
-                "fecha": h["fecha"].strftime("%Y-%m-%d"),
+                "fecha": h["fecha"].strftime("%Y-%m-%d") if isinstance(h["fecha"], (date, datetime)) else h["fecha"],
                 "nota": h["nota"],
                 "duracion_min": h["duracion_min"],
                 "obs": h["obs"]
             })
         data_to_save.append(t_copy)
-    
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data_to_save, f, ensure_ascii=False, indent=2)
+    return data_to_save
 
-# Inicializar estado en sesión con carga desde archivo
+# Cargar datos al iniciar
 if 'temas_db' not in st.session_state:
-    st.session_state.temas_db = cargar_datos()
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                st.session_state.temas_db = parse_dates(json.load(f))
+        except:
+            st.session_state.temas_db = parse_dates(TEMAS_DEFAULT)
+    else:
+        st.session_state.temas_db = parse_dates(TEMAS_DEFAULT)
+
+def guardar_local():
+    serialized = serialize_data(st.session_state.temas_db)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(serialized, f, ensure_ascii=False, indent=2)
+
+# Sidebar para exportar / importar copia de seguridad permanente
+with st.sidebar:
+    st.header("💾 Copia de Seguridad Cloud")
+    st.caption("Los servidores gratuitos de Streamlit reinician el disco duro si la app entra en reposo. Guarda tu copia con un clic:")
+    
+    json_bytes = json.dumps(serialize_data(st.session_state.temas_db), ensure_ascii=False, indent=2).encode('utf-8')
+    st.download_button(
+        label="📥 Descargar Copia de Seguridad",
+        data=json_bytes,
+        file_name="temas_oposicion_backup.json",
+        mime="application/json",
+        use_container_width=True
+    )
+    
+    uploaded_file = st.file_uploader("📤 Cargar Copia de Seguridad (.json)", type=["json"])
+    if uploaded_file is not None:
+        try:
+            loaded_data = json.load(uploaded_file)
+            st.session_state.temas_db = parse_dates(loaded_data)
+            guardar_local()
+            st.success("✅ ¡Datos cargados con éxito!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error al cargar archivo: {e}")
 
 def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
     if fecha_manual is not None:
         return fecha_manual
-    
     num_repasos = len(historial)
     if num_repasos == 0:
         return fecha_inicio + timedelta(days=1)
-    
     ultima_fecha = historial[-1]["fecha"]
-    
     if num_repasos < 6:
         dias = INTERVALOS_INICIALES[num_repasos]
     else:
         dias = 16 if (num_repasos % 2 != 0) else 32
-        
     return ultima_fecha + timedelta(days=dias)
 
-# Pestañas de la aplicación
+# Pestañas
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📌 Dashboard & Semáforo", 
     "➕ Añadir Nuevo Tema", 
@@ -107,20 +134,19 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Evolución & Notas"
 ])
 
-# --- TAB 1: DASHBOARD & SEMÁFORO ---
+# --- TAB 1: DASHBOARD ---
 with tab1:
-    st.subheader("📋 Estado Diario del Temario (Repasos Iniciales y Mantenimiento)")
+    st.subheader("📋 Estado Diario del Temario")
     hoy = date.today()
     
     if not st.session_state.temas_db:
-        st.warning("No hay temas registrados aún. Ve a la pestaña '➕ Añadir Nuevo Tema' para empezar.")
+        st.warning("No hay temas registrados.")
     else:
         filas_dashboard = []
         for t in st.session_state.temas_db:
             hist = t["historial"]
             num_repasos = len(hist)
             proximo_repaso = calcular_proxima_fecha(hist, t["fecha_inicio"], t.get("proximo_repaso_manual"))
-
             notas = [h["nota"] for h in hist if h["nota"] is not None]
             media_nota = round(sum(notas) / len(notas), 2) if notas else 0.0
 
@@ -186,8 +212,8 @@ with tab2:
                     "historial": [],
                     "proximo_repaso_manual": None
                 })
-                guardar_datos() # GUARDA EN ARCHIVO DISCO
-                st.toast(f"✅ ¡Tema '{nuevo_nombre}' guardado permanentemente!", icon="🎉")
+                guardar_local()
+                st.toast(f"✅ ¡Tema '{nuevo_nombre}' añadido!", icon="🎉")
                 st.success(f"¡Tema '{nuevo_nombre}' registrado!")
                 st.rerun()
 
@@ -198,8 +224,7 @@ with tab2:
 
 # --- TAB 3: MODO SIMULACRO / CANTE ---
 with tab3:
-    st.subheader("🎙️ Modo Simulacro de Cante (Evaluación en Vivo o Registro Retroactivo)")
-    st.info("💡 Selecciona el tema, la fecha real y evalúa. Se guardará de forma permanente.")
+    st.subheader("🎙️ Modo Simulacro de Cante")
     
     if not st.session_state.temas_db:
         st.warning("No hay temas disponibles.")
@@ -212,15 +237,15 @@ with tab3:
             col_c1, col_c2 = st.columns(2)
             with col_c1:
                 st.markdown("### ⏱️ Fecha y Tiempo del Cante")
-                fecha_cante_real = st.date_input("🗓️ Fecha real del cante:", value=date.today(), help="Puedes cambiar esta fecha si cantaste el tema días atrás.")
+                fecha_cante_real = st.date_input("🗓️ Fecha real del cante:", value=date.today())
                 duracion_cante = st.number_input("Duración del cante (minutos):", min_value=0.0, max_value=120.0, value=12.0, step=0.5)
             
             with col_c2:
                 st.markdown("### 📝 Evaluación de tu Pareja")
                 nota_c = st.slider("Nota asignada (0.0 a 10.0):", min_value=0.0, max_value=10.0, value=7.5, step=0.25)
-                obs_c = st.text_area("Anotaciones / Feedback:", placeholder="Ej: Excelente dicción, precisar bien la ordenanza municipal.")
+                obs_c = st.text_area("Anotaciones / Feedback:", placeholder="Ej: Excelente dicción.")
 
-            btn_registrar_cante = st.form_submit_button("💾 REGISTRAR CANTE Y RECALCULAR CURVA")
+            btn_registrar_cante = st.form_submit_button("💾 REGISTRAR CANTE")
             
             if btn_registrar_cante:
                 idx = next(i for i, t in enumerate(st.session_state.temas_db) if t["tema"] == tema_cantar)
@@ -240,16 +265,15 @@ with tab3:
                 
                 st.session_state.temas_db[idx]["historial"] = hist
                 st.session_state.temas_db[idx]["proximo_repaso_manual"] = None
-                guardar_datos() # GUARDA EN ARCHIVO DISCO
+                guardar_local()
                 
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
-                
-                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO Y GUARDADO: {tema_cantar}", icon="📝")
-                st.success(f"🎉 ¡Cante guardado permanentemente! Próximo cante programado: {proxima.strftime('%d/%m/%Y')}.")
+                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO", icon="📝")
+                st.success(f"🎉 ¡Cante guardado! Próximo cante: {proxima.strftime('%d/%m/%Y')}.")
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
 with tab4:
-    st.subheader("🛠️ Gestión de Imprevistos, Edición y Borrado de Cantes")
+    st.subheader("🛠️ Gestión de Imprevistos, Edición y Borrado")
     
     if not st.session_state.temas_db:
         st.warning("No hay temas registrados.")
@@ -269,32 +293,31 @@ with tab4:
             
             if st.button("📌 Reagendar Próximo Cante"):
                 st.session_state.temas_db[idx_t]["proximo_repaso_manual"] = nueva_fecha_manual
-                guardar_datos() # GUARDA EN ARCHIVO DISCO
-                st.toast("✅ Fecha del próximo cante actualizada", icon="🗓️")
-                st.success(f"Próximo repaso de '{tema_mod}' fijado para el {nueva_fecha_manual.strftime('%d/%m/%Y')}.")
+                guardar_local()
+                st.toast("✅ Fecha actualizada", icon="🗓️")
                 st.rerun()
 
         with col_m2:
-            st.markdown("### 🗑️ Modificar / Eliminar Cantes Registrados")
+            st.markdown("### 🗑️ Modificar / Eliminar Cantes")
             hist = t_obj["historial"]
             
             if not hist:
-                st.info("Este tema no tiene cantes registrados en su historial.")
+                st.info("Sin cantes registrados.")
             else:
                 opciones_cantes = [f"Repaso #{h['n']} - Fecha: {h['fecha'].strftime('%d/%m/%Y')} - Nota: {h['nota']}" for h in hist]
-                cante_sel_str = st.selectbox("Selecciona el cante a modificar o eliminar:", opciones_cantes)
+                cante_sel_str = st.selectbox("Selecciona cante:", opciones_cantes)
                 idx_cante = opciones_cantes.index(cante_sel_str)
                 cante_obj = hist[idx_cante]
                 
-                with st.expander("✏️ Editar datos de este cante", expanded=True):
-                    ed_fecha = st.date_input("Fecha del cante:", value=cante_obj["fecha"], key=f"ed_f_{idx_cante}")
+                with st.expander("✏️ Editar cante", expanded=True):
+                    ed_fecha = st.date_input("Fecha:", value=cante_obj["fecha"], key=f"ed_f_{idx_cante}")
                     ed_nota = st.slider("Nota:", min_value=0.0, max_value=10.0, value=float(cante_obj["nota"]), step=0.25, key=f"ed_n_{idx_cante}")
                     ed_min = st.number_input("Duración (min):", min_value=0.0, max_value=120.0, value=float(cante_obj["duracion_min"]), step=0.5, key=f"ed_m_{idx_cante}")
                     ed_obs = st.text_area("Observaciones:", value=cante_obj["obs"], key=f"ed_o_{idx_cante}")
                     
                     c_b1, c_b2 = st.columns(2)
                     with c_b1:
-                        if st.button("💾 Guardar Cambios en Cante", key=f"btn_save_c_{idx_cante}"):
+                        if st.button("💾 Guardar Cambios", key=f"btn_save_c_{idx_cante}"):
                             hist[idx_cante] = {
                                 "n": cante_obj["n"],
                                 "fecha": ed_fecha,
@@ -306,28 +329,28 @@ with tab4:
                             for i_h, h_item in enumerate(hist):
                                 h_item["n"] = i_h + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
-                            guardar_datos() # GUARDA EN ARCHIVO DISCO
-                            st.toast("✅ Cante modificado con éxito", icon="💾")
+                            guardar_local()
+                            st.toast("✅ Cante modificado", icon="💾")
                             st.rerun()
                     
                     with c_b2:
-                        if st.button("❌ Eliminar este Cante", key=f"btn_del_c_{idx_cante}"):
+                        if st.button("❌ Eliminar Cante", key=f"btn_del_c_{idx_cante}"):
                             hist.pop(idx_cante)
                             for new_i, item in enumerate(hist):
                                 item["n"] = new_i + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
-                            guardar_datos() # GUARDA EN ARCHIVO DISCO
-                            st.toast("🗑️ Cante eliminado correctamente", icon="🗑️")
+                            guardar_local()
+                            st.toast("🗑️ Cante eliminado", icon="🗑️")
                             st.rerun()
 
 # --- TAB 5: EVOLUCIÓN & NOTAS ---
 with tab5:
-    st.subheader("📊 Análisis de Evolución y Rendimiento por Tema")
+    st.subheader("📊 Análisis de Evolución por Tema")
     if not st.session_state.temas_db:
         st.warning("Sin datos.")
     else:
         nombres_temas = [t["tema"] for t in st.session_state.temas_db]
-        tema_analisis = st.selectbox("Elige tema para ver la gráfica de progreso:", nombres_temas, key="sel_analisis")
+        tema_analisis = st.selectbox("Elige tema:", nombres_temas, key="sel_analisis")
         
         obj_tema = next(t for t in st.session_state.temas_db if t["tema"] == tema_analisis)
         df_hist = pd.DataFrame(obj_tema["historial"])
@@ -338,12 +361,12 @@ with tab5:
             c_m2.metric("Último Cante", f"{df_hist['nota'].iloc[-1]} / 10")
             c_m3.metric("Tiempo Medio de Cante", f"{df_hist['duracion_min'].mean():.1f} min")
             
-            st.markdown("#### Progreso de Calificaciones por Repaso (Evolución Continua)")
+            st.markdown("#### Progreso de Calificaciones")
             st.line_chart(df_hist.set_index("n")[["nota"]])
             
-            st.markdown("#### Registro Histórico Completo de Cantes")
+            st.markdown("#### Registro Histórico Completo")
             st.dataframe(df_hist[["n", "fecha", "nota", "duracion_min", "obs"]].rename(columns={
                 "n": "Nº Repaso", "fecha": "Fecha", "nota": "Nota", "duracion_min": "Minutos", "obs": "Observaciones"
             }), use_container_width=True)
         else:
-            st.info("Este tema aún no tiene cantes o repasos registrados.")
+            st.info("Este tema no tiene cantes registrados.")
