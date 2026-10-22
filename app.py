@@ -76,6 +76,9 @@ def hoy():
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
 st.markdown("Repetición espaciada adaptativa: el intervalo depende de la nota obtenida y se recalcula desde la fecha real de cada cante.")
 
+if "aviso" in st.session_state:
+    st.success(st.session_state.pop("aviso"))
+
 # ---------------------------------------------------------------------------
 # DATOS POR DEFECTO
 # ---------------------------------------------------------------------------
@@ -413,8 +416,8 @@ with tab3:
                 guardar_todo()
 
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
-                st.toast(f"✅ CANTE #{len(hist)} REGISTRADO", icon="📝")
-                st.success(f"🎉 ¡Cante guardado! Próximo repaso: {proxima.strftime('%d/%m/%Y')}.")
+                st.session_state["aviso"] = f"🎉 Cante #{len(hist)} guardado. Próximo repaso: {proxima.strftime('%d/%m/%Y')}."
+                st.rerun()
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
 with tab4:
