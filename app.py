@@ -7,12 +7,12 @@ import os
 st.set_page_config(page_title="Gestor de Repasos y Cante - Oposición", layout="wide", page_icon="👮‍♂️")
 
 st.title("👮‍♂️ Gestor de Repasos y Cante - Curva del Olvido (Policía Local)")
-st.markdown("Sistema de triple garantía: **Sincronización Automática + Respaldo Local + Copias Descargables**.")
+st.markdown("Sistema inteligente de repetición espaciada continua: recalculado estricto desde la fecha real de ejecución.")
 
 INTERVALOS_INICIALES = [1, 2, 4, 8, 16, 32]
 DATA_FILE = "temas_data.json"
 
-# --- CONEXIÓN BLINDADA A GOOGLE SHEETS ---
+# --- CONEXIÓN A GOOGLE SHEETS ---
 use_gsheets = False
 conn = None
 
@@ -84,7 +84,7 @@ def serialize_data(data):
         data_to_save.append(t_copy)
     return data_to_save
 
-# Cargar datos (Prioridad: Google Sheets -> Archivo Local -> Valores por defecto)
+# Cargar datos
 if 'temas_db' not in st.session_state:
     loaded_flag = False
     if use_gsheets and conn is not None:
@@ -109,12 +109,9 @@ if 'temas_db' not in st.session_state:
 
 def guardar_todo():
     serialized = serialize_data(st.session_state.temas_db)
-    
-    # 1. Guardar localmente
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(serialized, f, ensure_ascii=False, indent=2)
         
-    # 2. Guardar en Google Sheets si está activo
     if use_gsheets and conn is not None:
         try:
             json_str = json.dumps(serialized, ensure_ascii=False)
@@ -123,7 +120,28 @@ def guardar_todo():
         except Exception as e:
             st.sidebar.warning(f"No se pudo sincronizar en Google Sheets: {e}")
 
-# --- SIDEBAR DE SEGURIDAD ---
+# --- CÁLCULO ESTRICTO DE PRÓXIMA FECHA ---
+def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
+    # Si hay fecha manual asignada deliberadamente por imprevisto, tiene prioridad
+    if fecha_manual is not None:
+        return fecha_manual
+    
+    num_repasos = len(historial)
+    if num_repasos == 0:
+        return fecha_inicio + timedelta(days=1)
+    
+    # Tomar SIEMPRE la fecha del ÚLTIMO cante realmente registrado
+    ultima_fecha_real = historial[-1]["fecha"]
+    
+    if num_repasos < 6:
+        dias = INTERVALOS_INICIALES[num_repasos]
+    else:
+        dias = 16 if (num_repasos % 2 != 0) else 32
+        
+    # La nueva fecha se calcula estricta desde el último cante
+    return ultima_fecha_real + timedelta(days=dias)
+
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("🛡️ Estado de Protección")
     if use_gsheets:
@@ -153,19 +171,6 @@ with st.sidebar:
             st.rerun()
         except Exception as e:
             st.error(f"Error al cargar copia: {e}")
-
-def calcular_proxima_fecha(historial, fecha_inicio, fecha_manual=None):
-    if fecha_manual is not None:
-        return fecha_manual
-    num_repasos = len(historial)
-    if num_repasos == 0:
-        return fecha_inicio + timedelta(days=1)
-    ultima_fecha = historial[-1]["fecha"]
-    if num_repasos < 6:
-        dias = INTERVALOS_INICIALES[num_repasos]
-    else:
-        dias = 16 if (num_repasos % 2 != 0) else 32
-    return ultima_fecha + timedelta(days=dias)
 
 # Pestañas
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -266,7 +271,7 @@ with tab2:
 
 # --- TAB 3: MODO SIMULACRO / CANTE ---
 with tab3:
-    st.subheader("🎙️ Modo Simulacro de Cante")
+    st.subheader("🎙️ Modo Simulacro de Cante (Cálculo estricto desde el día real)")
     
     if not st.session_state.temas_db:
         st.warning("No hay temas disponibles.")
@@ -279,7 +284,8 @@ with tab3:
             col_c1, col_c2 = st.columns(2)
             with col_c1:
                 st.markdown("### ⏱️ Fecha y Tiempo del Cante")
-                fecha_cante_real = st.date_input("🗓️ Fecha real del cante:", value=date.today())
+                # Por defecto marca la fecha de HOY para facilitar el registro en tiempo real
+                fecha_cante_real = st.date_input("🗓️ Fecha real del cante:", value=date.today(), help="Si cantaste el tema antes de lo previsto, deja marcada la fecha de hoy.")
                 duracion_cante = st.number_input("Duración del cante (minutos):", min_value=0.0, max_value=120.0, value=12.0, step=0.5)
             
             with col_c2:
@@ -287,7 +293,7 @@ with tab3:
                 nota_c = st.slider("Nota asignada (0.0 a 10.0):", min_value=0.0, max_value=10.0, value=7.5, step=0.25)
                 obs_c = st.text_area("Anotaciones / Feedback:", placeholder="Ej: Excelente dicción.")
 
-            btn_registrar_cante = st.form_submit_button("💾 REGISTRAR CANTE")
+            btn_registrar_cante = st.form_submit_button("💾 REGISTRAR CANTE Y RECALCULAR DESDE HOY")
             
             if btn_registrar_cante:
                 idx = next(i for i, t in enumerate(st.session_state.temas_db) if t["tema"] == tema_cantar)
@@ -301,17 +307,21 @@ with tab3:
                     "duracion_min": duracion_cante,
                     "obs": obs_c
                 })
+                
+                # Reordenar cronológicamente
                 hist = sorted(hist, key=lambda x: x["fecha"])
                 for i_h, h_item in enumerate(hist):
                     h_item["n"] = i_h + 1
                 
                 st.session_state.temas_db[idx]["historial"] = hist
+                # RESETEAR OBLIGATORIAMENTE la fecha manual para que no arrastre fijaciones antiguas
                 st.session_state.temas_db[idx]["proximo_repaso_manual"] = None
+                
                 guardar_todo()
                 
                 proxima = calcular_proxima_fecha(hist, st.session_state.temas_db[idx]["fecha_inicio"])
-                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO", icon="📝")
-                st.success(f"🎉 ¡Cante guardado! Próximo cante: {proxima.strftime('%d/%m/%Y')}.")
+                st.toast(f"✅ CANTE #{num_nuevo} REGISTRADO ({fecha_cante_real.strftime('%d/%m/%Y')})", icon="📝")
+                st.success(f"🎉 ¡Cante guardado! Próximo repaso programado para el {proxima.strftime('%d/%m/%Y')} (calculado desde la fecha de este cante).")
 
 # --- TAB 4: MODIFICAR / AJUSTAR FECHAS Y CANTES ---
 with tab4:
@@ -371,6 +381,7 @@ with tab4:
                             for i_h, h_item in enumerate(hist):
                                 h_item["n"] = i_h + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
+                            st.session_state.temas_db[idx_t]["proximo_repaso_manual"] = None
                             guardar_todo()
                             st.toast("✅ Cante modificado", icon="💾")
                             st.rerun()
@@ -381,6 +392,7 @@ with tab4:
                             for new_i, item in enumerate(hist):
                                 item["n"] = new_i + 1
                             st.session_state.temas_db[idx_t]["historial"] = hist
+                            st.session_state.temas_db[idx_t]["proximo_repaso_manual"] = None
                             guardar_todo()
                             st.toast("🗑️ Cante eliminado", icon="🗑️")
                             st.rerun()
